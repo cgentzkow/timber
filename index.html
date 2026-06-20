@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Timber — San Diego Retail Permit Tracker</title>
+<style>
+  :root{
+    --bg:#0f1714; --panel:#16211d; --panel2:#1d2c26; --line:#2a3a33;
+    --ink:#e8efe9; --mut:#8aa399; --grn:#3fae6b; --grn2:#2f8f56;
+    --amber:#e0a23c; --red:#d6604d; --blue:#5b9bd5; --slate:#7f8c99;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  #app{display:flex;flex-direction:column;height:100vh}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  header .logo{font-weight:800;font-size:20px;letter-spacing:.5px;color:var(--grn)}
+  header .logo span{color:var(--ink);font-weight:400;font-size:13px;margin-left:8px;letter-spacing:0}
+  header .meta{margin-left:auto;font-size:12px;color:var(--mut);text-align:right;line-height:1.4}
+  .main{flex:1;display:flex;min-height:0}
+  .side{width:430px;max-width:46%;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line)}
+  .filters{padding:12px 14px;border-bottom:1px solid var(--line);overflow:auto;max-height:46%}
+  .filters h4{margin:10px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut)}
+  .filters h4:first-child{margin-top:0}
+  .search{width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:14px}
+  .search::placeholder{color:var(--slate)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:5px 10px;border:1px solid var(--line);border-radius:20px;font-size:12px;cursor:pointer;background:var(--bg);color:var(--mut);user-select:none;transition:.12s}
+  .chip.on{background:var(--grn2);border-color:var(--grn);color:#fff}
+  .chip.dot::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--c,#888);vertical-align:middle}
+  .row2{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut)}
+  .row2 input[type=range]{flex:1;accent-color:var(--grn)}
+  .listhead{display:flex;align-items:center;padding:8px 14px;font-size:12px;color:var(--mut);border-bottom:1px solid var(--line);gap:8px}
+  .listhead select{margin-left:auto;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px}
+  .list{flex:1;overflow:auto}
+  .card{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+  .card:hover{background:var(--panel2)}
+  .card.sel{background:var(--panel2);box-shadow:inset 3px 0 0 var(--grn)}
+  .card .t{font-weight:600;font-size:14px;margin-bottom:2px;display:flex;align-items:center;gap:7px}
+  .card .a{font-size:12px;color:var(--mut)}
+  .card .badges{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
+  .b{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--bg);border:1px solid var(--line);color:var(--mut)}
+  .b.val{color:var(--grn);border-color:var(--grn2);font-weight:600}
+  .b.cat{color:#cfe6d8}
+  .tag{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;color:#fff}
+  #map{flex:1}
+  .det{position:absolute;right:0;top:0;height:100%;width:380px;background:var(--panel);border-left:1px solid var(--line);transform:translateX(100%);transition:.2s;overflow:auto;z-index:5;padding:16px}
+  .det.open{transform:translateX(0)}
+  .det h2{font-size:17px;margin:0 6px 4px 0}
+  .det .close{position:absolute;right:12px;top:12px;cursor:pointer;color:var(--mut);font-size:20px;border:none;background:none}
+  .det .addr{color:var(--mut);font-size:13px;margin-bottom:12px}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;margin-bottom:14px}
+  .kv .k{color:var(--mut)}
+  .det .scope{font-size:13px;line-height:1.5;color:#d4e2da;background:var(--bg);padding:10px;border-radius:8px;border:1px solid var(--line)}
+  .det a.ext{display:inline-block;margin-top:12px;color:var(--grn);font-size:13px}
+  .mapwrap{position:relative;flex:1;display:flex}
+  @media(max-width:760px){.side{width:100%;max-width:100%}.main{flex-direction:column}.mapwrap{min-height:50vh}.det{width:100%}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">TIMBER<span>San Diego retail permit pipeline</span></div>
+    <div class="meta" id="meta">loading…</div>
+  </header>
+  <div class="main">
+    <aside class="side">
+      <div class="filters">
+        <input class="search" id="q" placeholder="Search tenant, address, scope…" />
+        <h4>Project type</h4>
+        <div class="chips" id="catChips"></div>
+        <h4>Status</h4>
+        <div class="chips" id="statChips"></div>
+        <h4>Retail category</h4>
+        <div class="chips" id="rtChips"></div>
+        <h4>Minimum project value: <span id="valLbl" style="color:var(--grn)">$0</span></h4>
+        <div class="row2"><input type="range" id="valRange" min="0" max="2000000" step="50000" value="0"></div>
+      </div>
+      <div class="listhead">
+        <span id="count">—</span>
+        <select id="sort">
+          <option value="val">Sort: value ↓</option>
+          <option value="area">Sort: floor area ↓</option>
+          <option value="date">Sort: newest</option>
+        </select>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+    <div class="mapwrap">
+      <div id="map"></div>
+      <div class="det" id="det"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CATS = {
+  "New Construction":      "#3fae6b",
+  "Redevelopment / Remodel":"#5b9bd5",
+  "Demolition":            "#d6604d",
+  "Tenant Improvement":    "#e0a23c",
+  "Other":                 "#7f8c99",
+};
+const STATUS_COLOR = {
+  "Active / Under Construction":"#3fae6b",
+  "In Review":"#5b9bd5",
+  "On Hold":"#e0a23c",
+  "Cancelled/Expired":"#d6604d",
+  "Completed":"#7f8c99",
+};
+let DATA=[], MAP, CLUSTER, MARKERS=[], SELECTED=null;
+// default: lead with the big stuff, TIs off by default
+const state = {
+  cats:new Set(["New Construction","Redevelopment / Remodel","Demolition","Other"]),
+  stats:new Set(),      // empty = all
+  rts:new Set(),        // empty = all
+  minVal:0, q:"", sort:"val"
+};
+const fmt = n => n>=1e6 ? "$"+(n/1e6).toFixed(1)+"M" : n>=1e3 ? "$"+Math.round(n/1e3)+"K" : "$"+Math.round(n);
+
+async function boot(){
+  const r = await fetch("data/permits.json");
+  const j = await r.json();
+  DATA = j.permits;
+  document.getElementById("meta").innerHTML =
+    `${j.count.toLocaleString()} retail/commercial projects · ${j.years.join("–")}<br>`+
+    `Source: City of San Diego Open Data · updated ${new Date(j.generated).toLocaleDateString()}`;
+  buildChips();
+  if(window.google&&google.maps) initMap();
+  render();
+}
+function buildChips(){
+  const mk=(host,labels,set,colors)=>{
+    const el=document.getElementById(host); el.innerHTML="";
+    labels.forEach(l=>{
+      const c=document.createElement("div");
+      c.className="chip"+(colors?" dot":"")+(set.has(l)||set.size===0&&!colors?"":"");
+      if(set.has(l)) c.classList.add("on");
+      if(colors){c.style.setProperty("--c",colors[l]||"#888")}
+      c.textContent=l; c.onclick=()=>{set.has(l)?set.delete(l):set.add(l);c.classList.toggle("on");render();};
+      el.appendChild(c);
+    });
+  };
+  mk("catChips",Object.keys(CATS),state.cats,CATS);
+  mk("statChips",Object.keys(STATUS_COLOR),state.stats,STATUS_COLOR);
+  const rts=[...new Set(DATA.flatMap(d=>d.retailTypes))].sort();
+  mk("rtChips",rts,state.rts,null);
+}
+document.getElementById("q").oninput=e=>{state.q=e.target.value.toLowerCase();render();};
+document.getElementById("valRange").oninput=e=>{state.minVal=+e.target.value;
+  document.getElementById("valLbl").textContent=fmt(+e.target.value);render();};
+document.getElementById("sort").onchange=e=>{state.sort=e.target.value;render();};
+
+function pass(d){
+  if(!state.cats.has(d.category)) return false;
+  if(state.stats.size && !state.stats.has(d.status)) return false;
+  if(state.rts.size && !d.retailTypes.some(t=>state.rts.has(t))) return false;
+  if(d.valuation < state.minVal) return false;
+  if(state.q){
+    const hay=(d.tenant+" "+d.address+" "+d.title+" "+d.scope+" "+d.useType).toLowerCase();
+    if(!hay.includes(state.q)) return false;
+  }
+  return true;
+}
+function sorted(arr){
+  const k={val:d=>-d.valuation,area:d=>-d.floorArea,date:d=>d.createDate}[state.sort];
+  return arr.slice().sort((a,b)=> k(a)>k(b)?1:k(a)<k(b)?-1:0);
+}
+function render(){
+  const rows=sorted(DATA.filter(pass));
+  document.getElementById("count").textContent=`${rows.length.toLocaleString()} shown`;
+  const L=document.getElementById("list"); L.innerHTML="";
+  rows.slice(0,400).forEach(d=>{
+    const c=document.createElement("div"); c.className="card"+(SELECTED===d?" sel":"");
+    const tagc=STATUS_COLOR[d.status]||"#888";
+    c.innerHTML=`<div class="t">${d.tenant?`<span>${esc(d.tenant)}</span>`:`<span style="color:var(--mut)">${esc(d.useType||"Commercial project")}</span>`}</div>
+      <div class="a">${esc(d.address||"—")}</div>
+      <div class="badges">
+        ${d.valuation?`<span class="b val">${fmt(d.valuation)}</span>`:""}
+        ${d.floorArea?`<span class="b">${Math.round(d.floorArea).toLocaleString()} sf</span>`:""}
+        <span class="b cat" style="border-color:${CATS[d.category]}">${d.category}</span>
+        <span class="tag" style="background:${tagc}">${d.status.split(" / ")[0]}</span>
+      </div>`;
+    c.onclick=()=>select(d,true);
+    L.appendChild(c);
+  });
+  drawMarkers(rows);
+}
+function esc(s){return (s||"").replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+
+function initMap(){
+  MAP=new google.maps.Map(document.getElementById("map"),{
+    center:{lat:32.78,lng:-117.13},zoom:11,mapId:"DEMO_MAP_ID",
+    styles:[{elementType:"geometry",stylers:[{color:"#1d2c26"}]},
+      {elementType:"labels.text.fill",stylers:[{color:"#8aa399"}]},
+      {elementType:"labels.text.stroke",stylers:[{color:"#0f1714"}]},
+      {featureType:"water",stylers:[{color:"#13201c"}]},
+      {featureType:"road",elementType:"geometry",stylers:[{color:"#26352f"}]},
+      {featureType:"poi",stylers:[{visibility:"off"}]}],
+    disableDefaultUI:true, zoomControl:true
+  });
+  render();
+}
+function drawMarkers(rows){
+  if(!MAP) return;
+  MARKERS.forEach(m=>m.setMap(null)); MARKERS=[];
+  if(CLUSTER) CLUSTER.clearMarkers();
+  const bounds=new google.maps.LatLngBounds();
+  rows.forEach(d=>{
+    if(!d.lat||!d.lng) return;
+    const m=new google.maps.Marker({position:{lat:d.lat,lng:d.lng},
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:d.valuation>2e6?8:d.valuation>5e5?6:4.5,
+        fillColor:CATS[d.category]||"#888",fillOpacity:.92,strokeColor:"#0f1714",strokeWeight:1.2}});
+    m.addListener("click",()=>select(d,false));
+    MARKERS.push(m); bounds.extend(m.getPosition());
+  });
+  if(window.markerClusterer){
+    CLUSTER=new markerClusterer.MarkerClusterer({map:MAP,markers:MARKERS});
+  } else MARKERS.forEach(m=>m.setMap(MAP));
+  if(MARKERS.length && MARKERS.length<400) MAP.fitBounds(bounds);
+}
+function select(d,pan){
+  SELECTED=d; render();
+  if(pan&&MAP&&d.lat){MAP.panTo({lat:d.lat,lng:d.lng});if(MAP.getZoom()<14)MAP.setZoom(15);}
+  const det=document.getElementById("det");
+  const link=`https://aca-prod.accela.com/SANDIEGO/Cap/CapHome.aspx?module=DSD`;
+  det.innerHTML=`<button class="close" onclick="document.getElementById('det').classList.remove('open')">×</button>
+    <h2>${esc(d.tenant||d.useType||"Commercial project")}</h2>
+    <div class="addr">${esc(d.address||"")}</div>
+    <div class="kv">
+      <div class="k">Project value</div><div>${d.valuation?fmt(d.valuation)+` (${d.valuation.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0})})`:"—"}</div>
+      <div class="k">Floor area</div><div>${d.floorArea?Math.round(d.floorArea).toLocaleString()+" sf":"—"}</div>
+      <div class="k">Stories</div><div>${d.stories||"—"}</div>
+      <div class="k">Type</div><div>${d.category}</div>
+      <div class="k">Use code</div><div>${esc(d.useType||"—")}</div>
+      <div class="k">Retail category</div><div>${d.retailTypes.join(", ")||"—"}</div>
+      <div class="k">Status</div><div><span class="tag" style="background:${STATUS_COLOR[d.status]||'#888'}">${d.status}</span></div>
+      <div class="k">Tenant (best-effort)</div><div>${esc(d.tenant)||'<span style="color:var(--mut)">not named in permit</span>'}</div>
+      <div class="k">Permit holder</div><div>${esc(d.permitHolder)||"—"}</div>
+      <div class="k">APN</div><div>${esc(d.apn)||"—"}</div>
+      <div class="k">Filed</div><div>${d.createDate||"—"}</div>
+      <div class="k">Issued</div><div>${d.issueDate||"—"}</div>
+      <div class="k">Approvals</div><div>${esc(d.approvalTypes.join(", "))||"—"}</div>
+    </div>
+    <div class="scope">${esc(d.scope)||"No scope description."}</div>
+    <a class="ext" href="${link}" target="_blank">Open San Diego permit portal ↗</a>`;
+  det.classList.add("open");
+}
+window.gmapsReady=()=>{ if(DATA.length) initMap(); };
+boot();
+</script>
+<script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDL-wZEWHToMMlbCF2YybG4CC-20X3tpn4&callback=gmapsReady"></script>
+</body>
+</html>

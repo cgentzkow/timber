@@ -1,0 +1,4 @@
+data/.cache_*.csv
+sd2026.csv
+*.pyc
+__pycache__/

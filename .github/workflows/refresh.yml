@@ -1,0 +1,33 @@
+name: Refresh data & deploy
+on:
+  schedule:
+    - cron: "0 13 * * 1"      # every Monday 13:00 UTC (~6am PT)
+  push:
+    branches: [main]
+  workflow_dispatch:           # manual "Run now" button
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Rebuild permit data from San Diego Open Data
+        run: python3 scripts/build_data.py
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name "timber-bot"
+          git config user.email "bot@gentz.co"
+          git add data/permits.json
+          git commit -m "weekly data refresh" || echo "no changes"
+          git push || echo "nothing to push"
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy . --project-name=timber --branch=main --commit-dirty=true
