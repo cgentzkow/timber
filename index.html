@@ -44,6 +44,10 @@
   .b.cat{color:#cfe6d8}
   .tag{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;color:#fff}
   #map{flex:1}
+  .layerbar{display:flex;gap:2px;margin:10px 10px 0 0;background:rgba(15,23,20,.85);border:1px solid var(--line);border-radius:8px;padding:3px;backdrop-filter:blur(6px)}
+  .layerbtn{border:none;background:transparent;color:var(--mut);font-size:12px;font-weight:600;padding:6px 11px;border-radius:6px;cursor:pointer;font-family:inherit}
+  .layerbtn:hover{color:var(--ink)}
+  .layerbtn.on{background:var(--grn2);color:#fff}
   .det{position:absolute;right:0;top:0;height:100%;width:380px;background:var(--panel);border-left:1px solid var(--line);transform:translateX(100%);transition:.2s;overflow:auto;z-index:5;padding:16px}
   .det.open{transform:translateX(0)}
   .det h2{font-size:17px;margin:0 6px 4px 0}
@@ -166,8 +170,14 @@ function sorted(arr){
   const k={val:d=>-d.valuation,area:d=>-d.floorArea,date:d=>d.createDate}[state.sort];
   return arr.slice().sort((a,b)=> k(a)>k(b)?1:k(a)<k(b)?-1:0);
 }
+let CURROWS=[];
 function render(){
-  const rows=sorted(DATA.filter(pass));
+  CURROWS=sorted(DATA.filter(pass));
+  renderList();
+  drawMarkers(CURROWS,true);   // re-fit only when filters change
+}
+function renderList(){
+  const rows=CURROWS;
   document.getElementById("count").textContent=`${rows.length.toLocaleString()} shown`;
   const L=document.getElementById("list"); L.innerHTML="";
   rows.slice(0,400).forEach(d=>{
@@ -184,24 +194,47 @@ function render(){
     c.onclick=()=>select(d,true);
     L.appendChild(c);
   });
-  drawMarkers(rows);
 }
 function esc(s){return (s||"").replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
 
+const DARK_STYLE=[{elementType:"geometry",stylers:[{color:"#1d2c26"}]},
+  {elementType:"labels.text.fill",stylers:[{color:"#8aa399"}]},
+  {elementType:"labels.text.stroke",stylers:[{color:"#0f1714"}]},
+  {featureType:"water",stylers:[{color:"#13201c"}]},
+  {featureType:"road",elementType:"geometry",stylers:[{color:"#26352f"}]},
+  {featureType:"poi",stylers:[{visibility:"off"}]}];
+
 function initMap(){
   MAP=new google.maps.Map(document.getElementById("map"),{
-    center:{lat:32.78,lng:-117.13},zoom:11,mapId:"DEMO_MAP_ID",
-    styles:[{elementType:"geometry",stylers:[{color:"#1d2c26"}]},
-      {elementType:"labels.text.fill",stylers:[{color:"#8aa399"}]},
-      {elementType:"labels.text.stroke",stylers:[{color:"#0f1714"}]},
-      {featureType:"water",stylers:[{color:"#13201c"}]},
-      {featureType:"road",elementType:"geometry",stylers:[{color:"#26352f"}]},
-      {featureType:"poi",stylers:[{visibility:"off"}]}],
-    disableDefaultUI:true, zoomControl:true
+    center:{lat:32.78,lng:-117.13},zoom:11,
+    disableDefaultUI:true, zoomControl:true,
+    streetViewControl:true,                 // drag the pegman for Street View
+    streetViewControlOptions:{position:google.maps.ControlPosition.RIGHT_BOTTOM},
+    gestureHandling:"greedy"
   });
+  // register the custom Dark basemap
+  MAP.mapTypes.set("dark", new google.maps.StyledMapType(DARK_STYLE,{name:"Dark"}));
+  MAP.setMapTypeId("dark");
+  buildLayerControl();
   render();
 }
-function drawMarkers(rows){
+
+function buildLayerControl(){
+  const LAYERS=[["Dark","dark"],["Street","roadmap"],["Aerial","satellite"],["Hybrid","hybrid"]];
+  const bar=document.createElement("div"); bar.className="layerbar";
+  LAYERS.forEach(([label,id],i)=>{
+    const b=document.createElement("button");
+    b.textContent=label; b.className="layerbtn"+(i===0?" on":"");
+    b.onclick=()=>{
+      MAP.setMapTypeId(id);
+      bar.querySelectorAll(".layerbtn").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+    };
+    bar.appendChild(b);
+  });
+  MAP.controls[google.maps.ControlPosition.TOP_RIGHT].push(bar);
+}
+function drawMarkers(rows,fit){
   if(!MAP) return;
   MARKERS.forEach(m=>m.setMap(null)); MARKERS=[];
   if(CLUSTER) CLUSTER.clearMarkers();
@@ -217,10 +250,10 @@ function drawMarkers(rows){
   if(window.markerClusterer){
     CLUSTER=new markerClusterer.MarkerClusterer({map:MAP,markers:MARKERS});
   } else MARKERS.forEach(m=>m.setMap(MAP));
-  if(MARKERS.length && MARKERS.length<400) MAP.fitBounds(bounds);
+  if(fit && MARKERS.length && MARKERS.length<400) MAP.fitBounds(bounds);
 }
 function select(d,pan){
-  SELECTED=d; render();
+  SELECTED=d; renderList();   // highlight only — never touches the map view
   if(pan&&MAP&&d.lat){MAP.panTo({lat:d.lat,lng:d.lng});if(MAP.getZoom()<14)MAP.setZoom(15);}
   const det=document.getElementById("det");
   const link=`https://aca-prod.accela.com/SANDIEGO/Cap/CapHome.aspx?module=DSD`;
