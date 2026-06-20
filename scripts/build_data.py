@@ -35,6 +35,16 @@ NONBUILDING_TYPE = re.compile(
     re.I,
 )
 
+# Multifamily residential BC codes — drop UNLESS an explicit commercial/retail
+# signal is present (true mixed-use ground-floor retail is kept).
+MULTIFAMILY_BC = re.compile(
+    r"(Add/Alt 3\+|3\+ Fam|Family Apt|Family Condo|Five or More|"
+    r"Three or Four Family|Two family|Add/Alt Acc)", re.I)
+STRONG_RETAIL = re.compile(
+    r"\b(retail|restaurant|storefront|mercantile|commercial (space|tenant|unit|"
+    r"shell)|ground[- ]?floor (retail|commercial)|drive[- ]?thru|car ?wash|"
+    r"gas station|mixed[- ]?use commercial)\b", re.I)
+
 # Hard excludes — commercial but NOT consumer-facing retail
 EXCLUDE_RE = re.compile(
     r"(wireless|telecommunication|\bwcf\b|cell (tower|site)|antenna|monopole|"
@@ -264,6 +274,9 @@ def main():
             text = f"{title} {scope} {ascope} {bc}"
 
             if EXCLUDE_RE.search(text):
+                continue
+            # drop multifamily-residential renovations unless explicitly retail
+            if MULTIFAMILY_BC.search(bc) and not STRONG_RETAIL.search(text):
                 continue
             # Retail gate: whitelist BC OR a retail keyword somewhere in the text
             is_retail = bool(RETAIL_BC.search(bc)) or bool(RETAIL_ANY.search(text))
